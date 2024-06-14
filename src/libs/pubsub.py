@@ -11,8 +11,8 @@ import certifi
 import grpc
 import requests
 
-import pubsub_api_pb2 as pb2
-import pubsub_api_pb2_grpc as pb2_grpc
+import libs.pubsub_api_pb2 as pb2
+import libs.pubsub_api_pb2_grpc as pb2_grpc
 
 from urllib.parse import urlparse
 
