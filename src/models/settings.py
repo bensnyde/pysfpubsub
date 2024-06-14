@@ -1,14 +1,16 @@
 from pydantic import SecretStr, HttpUrl
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
 
 class Settings(BaseSettings):
 
-  debug: bool = False
-  
-  grpc_host: str
-  grpc_port: int
-  topic: str
-  password: SecretStr
-  user: str
-  url: HttpUrl
-  api_version: str = "57.0"
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
+    DEBUG: bool = True
+    GRPC_HOST: str
+    GRPC_PORT: int
+    TOPIC: str
+    PASSWORD: SecretStr
+    USER: str
+    URL: HttpUrl
+    API_VERSION: str = "57.0"

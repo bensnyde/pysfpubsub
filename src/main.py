@@ -1,11 +1,13 @@
 import logging
+from datetime import datetime
 from libs.pubsub import PubSub
 from models.settings import Settings
 
+
 def process_event(event, pubsub):
     """
-    This is a callback that gets passed to the `PubSub.subscribe()` method. 
-    When no events are received within a certain time period, the API's subscribe 
+    This is a callback that gets passed to the `PubSub.subscribe()` method.
+    When no events are received within a certain time period, the API's subscribe
     method sends keepalive messages and the latest replay ID through this callback.
     """
     if event.events:
@@ -29,13 +31,15 @@ def process_event(event, pubsub):
     # Implement storage of replay for resubscribe!!!
     event.latest_replay_id
 
+
 def run(settings: Settings) -> None:
     sfdc_updater = PubSub(settings)
     sfdc_updater.auth()
-    sfdc_updater.subscribe(settings.topic, "LATEST", "", 1, process_event)
+    sfdc_updater.subscribe(settings.TOPIC, "LATEST", "", 1, process_event)
 
-if __name__ == '__main__':
-  settings = Settings()
-  logging.basicConfig(
-    level=logging.DEBUG if settings.DEBUG else logging.INFO
-  )
+
+if __name__ == "__main__":
+    settings = Settings()
+    logging.basicConfig(level=logging.DEBUG if settings.DEBUG else logging.INFO)
+    logging.debug(settings)
+    run(settings)

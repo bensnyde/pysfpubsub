@@ -15,10 +15,11 @@ import libs.pubsub_api_pb2 as pb2
 import libs.pubsub_api_pb2_grpc as pb2_grpc
 
 from urllib.parse import urlparse
+from models.settings import Settings
 
-
-with open(certifi.where(), 'rb') as f:
+with open(certifi.where(), "rb") as f:
     secure_channel_credentials = grpc.ssl_channel_credentials(f.read())
+
 
 class PubSub(object):
     """
@@ -28,19 +29,19 @@ class PubSub(object):
     json_schema_dict = {}
 
     def __init__(self, settings: Settings) -> None:
-        self.url = settings.url
-        self.username = settings.user
-        self.password = settings.password
+        self.url = settings.URL
+        self.username = settings.USER
+        self.password = settings.PASSWORD
         self.metadata = None
-        grpc_host = settings.grpc_host
-        grpc_port = settings.grpc_port
+        grpc_host = settings.GRPC_HOST
+        grpc_port = settings.GRPC_PORT
         pubsub_url = f"{grpc_host}:{grpc_port}"
         channel = grpc.secure_channel(pubsub_url, secure_channel_credentials)
         self.stub = pb2_grpc.PubSubStub(channel)
         self.session_id = None
         self.pb2 = pb2
-        self.topic_name = settings.topic
-        self.apiVersion = settings.api_version
+        self.topic_name = settings.TOPIC
+        self.apiVersion = settings.API_VERSION
 
         """
         Semaphore used for subscriptions. This keeps the subscription stream open
@@ -61,34 +62,39 @@ class PubSub(object):
         to create a tuple of metadata headers, which are needed for every RPC
         call.
         """
-        url_suffix = f'/services/Soap/u/{self.apiVersion}/'
-        headers = {'content-type': 'text/xml', 'SOAPAction': 'Login'}
-        xml = "<soapenv:Envelope xmlns:soapenv='http://schemas.xmlsoap.org/soap/envelope/' " + \
-              "xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' " + \
-              "xmlns:urn='urn:partner.soap.sforce.com'><soapenv:Body>" + \
-              "<urn:login><urn:username><![CDATA[" + self.username + \
-              "]]></urn:username><urn:password><![CDATA[" + self.password.get_secret_value() + \
-              "]]></urn:password></urn:login></soapenv:Body></soapenv:Envelope>"
+        url_suffix = f"/services/Soap/u/{self.apiVersion}/"
+        headers = {"content-type": "text/xml", "SOAPAction": "Login"}
+        xml = (
+            "<soapenv:Envelope xmlns:soapenv='http://schemas.xmlsoap.org/soap/envelope/' "
+            + "xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' "
+            + "xmlns:urn='urn:partner.soap.sforce.com'><soapenv:Body>"
+            + "<urn:login><urn:username><![CDATA["
+            + self.username
+            + "]]></urn:username><urn:password><![CDATA["
+            + self.password.get_secret_value()
+            + "]]></urn:password></urn:login></soapenv:Body></soapenv:Envelope>"
+        )
         res = requests.post(str(self.url) + url_suffix, data=xml, headers=headers)
-        res_xml = et.fromstring(res.content.decode('utf-8'))[0][0][0]
+        res_xml = et.fromstring(res.content.decode("utf-8"))[0][0][0]
 
         try:
             url_parts = urlparse(res_xml[3].text)
             self.url = "{}://{}".format(url_parts.scheme, url_parts.netloc)
             self.session_id = res_xml[4].text
         except IndexError:
-            print("An exception occurred. Check the response XML below:",
-            res.__dict__)
+            print("An exception occurred. Check the response XML below:", res.__dict__)
 
         # Get org ID from UserInfo
         uinfo = res_xml[6]
         # Org ID
-        self.tenant_id = uinfo[8].text;
+        self.tenant_id = uinfo[8].text
 
         # Set metadata headers
-        self.metadata = (('accesstoken', self.session_id),
-                         ('instanceurl', self.url),
-                         ('tenantid', self.tenant_id))
+        self.metadata = (
+            ("accesstoken", self.session_id),
+            ("instanceurl", self.url),
+            ("tenantid", self.tenant_id),
+        )
 
     def release_subscription_semaphore(self):
         """
@@ -109,12 +115,13 @@ class PubSub(object):
             case "CUSTOM":
                 replay_preset = pb2.ReplayPreset.CUSTOM
             case _:
-                raise ValueError('Invalid Replay Type ' + replay_type)
+                raise ValueError("Invalid Replay Type " + replay_type)
         return pb2.FetchRequest(
             topic_name=topic,
             replay_preset=replay_preset,
             replay_id=bytes.fromhex(replay_id),
-            num_requested=num_requested)
+            num_requested=num_requested,
+        )
 
     def fetch_req_stream(self, topic, replay_type, replay_id, num_requested):
         """
@@ -167,16 +174,22 @@ class PubSub(object):
         return ret
 
     def get_topic(self, topic_name):
-        return self.stub.GetTopic(pb2.TopicRequest(topic_name=topic_name),
-                                  metadata=self.metadata)
+        return self.stub.GetTopic(
+            pb2.TopicRequest(topic_name=topic_name), metadata=self.metadata
+        )
 
     def get_schema_json(self, schema_id):
         """
         Uses GetSchema RPC to retrieve schema given a schema ID.
         """
         # If the schema is not found in the dictionary, get the schema and store it in the dictionary
-        if schema_id not in self.json_schema_dict or self.json_schema_dict[schema_id]==None:
-            res = self.stub.GetSchema(pb2.SchemaRequest(schema_id=schema_id), metadata=self.metadata)
+        if (
+            schema_id not in self.json_schema_dict
+            or self.json_schema_dict[schema_id] == None
+        ):
+            res = self.stub.GetSchema(
+                pb2.SchemaRequest(schema_id=schema_id), metadata=self.metadata
+            )
             self.json_schema_dict[schema_id] = res.schema_json
 
         return self.json_schema_dict[schema_id]
@@ -188,13 +201,10 @@ class PubSub(object):
         """
         payload = {
             "CreatedDate": int(datetime.now().timestamp()),
-            "CreatedById": '005R0000000cw06IAA',  # Your user ID
-            "textt__c": 'Hello World'
+            "CreatedById": "005R0000000cw06IAA",  # Your user ID
+            "textt__c": "Hello World",
         }
-        req = {
-            "schema_id": schema_id,
-            "payload": self.encode(schema, payload)
-        }
+        req = {"schema_id": schema_id, "payload": self.encode(schema, payload)}
         return [req]
 
     def subscribe(self, topic, replay_type, replay_id, num_requested, callback):
@@ -206,7 +216,10 @@ class PubSub(object):
         designed and may not be necessary for other languages--Java, for
         example, does not need this).
         """
-        sub_stream = self.stub.Subscribe(self.fetch_req_stream(topic, replay_type, replay_id, num_requested), metadata=self.metadata)
+        sub_stream = self.stub.Subscribe(
+            self.fetch_req_stream(topic, replay_type, replay_id, num_requested),
+            metadata=self.metadata,
+        )
         print("> Subscribed to", topic)
         for event in sub_stream:
             callback(event, self)
@@ -216,8 +229,10 @@ class PubSub(object):
         Publishes events to the specified Platform Event topic.
         """
 
-        return self.stub.Publish(self.pb2.PublishRequest(
-            topic_name=topic_name,
-            events=self.generate_producer_events(schema,
-                                                 schema_id)),
-            metadata=self.metadata)
+        return self.stub.Publish(
+            self.pb2.PublishRequest(
+                topic_name=topic_name,
+                events=self.generate_producer_events(schema, schema_id),
+            ),
+            metadata=self.metadata,
+        )
