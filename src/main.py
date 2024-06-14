@@ -1,5 +1,5 @@
 import logging
-from settings import Settings
+from models.settings import Settings
 
 
 def run(settings: Settings) -> None:
