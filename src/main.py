@@ -35,6 +35,7 @@ def process_event(event, pubsub):
 def run(settings: Settings) -> None:
     sfdc_updater = PubSub(settings)
     sfdc_updater.auth()
+    sfdc_updater.publish(settings.TOPIC)
     sfdc_updater.subscribe(settings.TOPIC, "LATEST", "", 1, process_event)
 
 

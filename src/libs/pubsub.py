@@ -14,34 +14,33 @@ import requests
 import libs.pubsub_api_pb2 as pb2
 import libs.pubsub_api_pb2_grpc as pb2_grpc
 
-from urllib.parse import urlparse
+from urllib.parse import urlparse, ParseResult
 from models.settings import Settings
+from typing import Any
+
 
 with open(certifi.where(), "rb") as f:
     secure_channel_credentials = grpc.ssl_channel_credentials(f.read())
 
 
-class PubSub(object):
-    """
-    Class with helpers to use the Salesforce Pub/Sub API.
-    """
-
-    json_schema_dict = {}
+class PubSub:
+    """Class with helpers to use the Salesforce Pub/Sub API."""
+    json_schema_dict: dict[str, Any] = {}
 
     def __init__(self, settings: Settings) -> None:
-        self.url = settings.URL
-        self.username = settings.USER
-        self.password = settings.PASSWORD
-        self.metadata = None
-        grpc_host = settings.GRPC_HOST
-        grpc_port = settings.GRPC_PORT
-        pubsub_url = f"{grpc_host}:{grpc_port}"
+        self.url: str = settings.URL
+        self.username: str = settings.USER
+        self.password: str = settings.PASSWORD
+        self.metadata: tuple[tuple[str, str]] | None = None
+        grpc_host: str = settings.GRPC_HOST
+        grpc_port: int = settings.GRPC_PORT
+        pubsub_url: str = f"{grpc_host}:{grpc_port}"
         channel = grpc.secure_channel(pubsub_url, secure_channel_credentials)
         self.stub = pb2_grpc.PubSubStub(channel)
-        self.session_id = None
-        self.pb2 = pb2
-        self.topic_name = settings.TOPIC
-        self.apiVersion = settings.API_VERSION
+        self.session_id: str | None = None
+        self.pb2: pb2 = pb2
+        self.topic_name: str = settings.TOPIC
+        self.apiVersion: str = settings.API_VERSION
 
         """
         Semaphore used for subscriptions. This keeps the subscription stream open
@@ -53,7 +52,7 @@ class PubSub(object):
         Make sure to use only one semaphore per subscribe call if you are planning
         to share the same instance of PubSub.
         """
-        self.semaphore = threading.Semaphore(1)
+        self.semaphore: threading.Semaphore = threading.Semaphore(1)
 
     def auth(self):
         """
@@ -62,9 +61,9 @@ class PubSub(object):
         to create a tuple of metadata headers, which are needed for every RPC
         call.
         """
-        url_suffix = f"/services/Soap/u/{self.apiVersion}/"
-        headers = {"content-type": "text/xml", "SOAPAction": "Login"}
-        xml = (
+        url_suffix: str = f"/services/Soap/u/{self.apiVersion}/"
+        headers: dict[str, str] = {"content-type": "text/xml", "SOAPAction": "Login"}
+        xml: tuple[str] = (
             "<soapenv:Envelope xmlns:soapenv='http://schemas.xmlsoap.org/soap/envelope/' "
             + "xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' "
             + "xmlns:urn='urn:partner.soap.sforce.com'><soapenv:Body>"
@@ -74,11 +73,11 @@ class PubSub(object):
             + self.password.get_secret_value()
             + "]]></urn:password></urn:login></soapenv:Body></soapenv:Envelope>"
         )
-        res = requests.post(str(self.url) + url_suffix, data=xml, headers=headers)
-        res_xml = et.fromstring(res.content.decode("utf-8"))[0][0][0]
+        res: requests.models.Response = requests.post(str(self.url) + url_suffix, data=xml, headers=headers)
+        res_xml: et.Element = et.fromstring(res.content.decode("utf-8"))[0][0][0]
 
         try:
-            url_parts = urlparse(res_xml[3].text)
+            url_parts: ParseResult = urlparse(res_xml[3].text)
             self.url = "{}://{}".format(url_parts.scheme, url_parts.netloc)
             self.session_id = res_xml[4].text
         except IndexError:
@@ -87,7 +86,7 @@ class PubSub(object):
         # Get org ID from UserInfo
         uinfo = res_xml[6]
         # Org ID
-        self.tenant_id = uinfo[8].text
+        self.tenant_id: str = uinfo[8].text
 
         # Set metadata headers
         self.metadata = (
@@ -96,17 +95,13 @@ class PubSub(object):
             ("tenantid", self.tenant_id),
         )
 
-    def release_subscription_semaphore(self):
-        """
-        Release semaphore so FetchRequest can be sent
-        """
+    def release_subscription_semaphore(self) -> None:
+        """Release semaphore so FetchRequest can be sent."""
         self.semaphore.release()
 
-    def make_fetch_request(self, topic, replay_type, replay_id, num_requested):
-        """
-        Creates a FetchRequest per the proto file.
-        """
-        replay_preset = None
+    def make_fetch_request(self, topic: str, replay_type: str, replay_id: int, num_requested: int) -> pb2.FetchRequest:
+        """Creates a FetchRequest per the proto file."""
+        replay_preset: pb2.ReplayPreset | None = None
         match replay_type:
             case "LATEST":
                 replay_preset = pb2.ReplayPreset.LATEST
@@ -123,17 +118,15 @@ class PubSub(object):
             num_requested=num_requested,
         )
 
-    def fetch_req_stream(self, topic, replay_type, replay_id, num_requested):
-        """
-        Returns a FetchRequest stream for the Subscribe RPC.
-        """
+    def fetch_req_stream(self, topic: str, replay_type: str, replay_id: int, num_requested: int) -> pb2.FetchRequest:
+        """Returns a FetchRequest stream for the Subscribe RPC."""
         while True:
             # Only send FetchRequest when needed. Semaphore release indicates need for new FetchRequest
             self.semaphore.acquire()
             print("Sending Fetch Request")
             yield self.make_fetch_request(topic, replay_type, replay_id, num_requested)
 
-    def encode(self, schema, payload):
+    def encode(self, schema, payload: dict[str, Any]) -> bytes:
         """
         Uses Avro and the event schema to encode a payload. The `encode()` and
         `decode()` methods are helper functions to serialize and deserialize
@@ -153,7 +146,7 @@ class PubSub(object):
         writer.write(payload, encoder)
         return buf.getvalue()
 
-    def decode(self, schema, payload):
+    def decode(self, schema, payload: bytes) -> dict[str, Any]:
         """
         Uses Avro and the event schema to decode a serialized payload. The
         `encode()` and `decode()` methods are helper functions to serialize and
@@ -173,15 +166,14 @@ class PubSub(object):
         ret = reader.read(decoder)
         return ret
 
-    def get_topic(self, topic_name):
+    def get_topic(self, topic_name: str) -> pb2.TopicInfo:
+        """Uses GetTopic RPC to retrieve topic given topic_name."""
         return self.stub.GetTopic(
             pb2.TopicRequest(topic_name=topic_name), metadata=self.metadata
         )
 
-    def get_schema_json(self, schema_id):
-        """
-        Uses GetSchema RPC to retrieve schema given a schema ID.
-        """
+    def get_schema_json(self, schema_id: str):
+        """Uses GetSchema RPC to retrieve schema given a schema ID."""
         # If the schema is not found in the dictionary, get the schema and store it in the dictionary
         if (
             schema_id not in self.json_schema_dict
@@ -194,20 +186,27 @@ class PubSub(object):
 
         return self.json_schema_dict[schema_id]
 
-    def generate_producer_events(self, schema, schema_id):
-        """
-        Encodes the data to be sent in the event and creates a ProducerEvent per
-        the proto file. Change the below payload to match the schema used.
-        """
-        payload = {
+    def generate_producer_events(self, schema, schema_id: str) -> list[dict[str, Any]]:
+        """Genereates event to publish."""
+        payload: dict[str, Any] = {
             "CreatedDate": int(datetime.now().timestamp()),
-            "CreatedById": "005R0000000cw06IAA",  # Your user ID
-            "textt__c": "Hello World",
+            "CreatedById": "005R0000000cw06IAA",
+            "Text__c": "",
+            "Agent_Master_Id__c": None,
+            "Certification_Number__c": "",
+            "Effective_Date__c": None,
+            "FFM_Id__c": "",
+            "Novasys_Primary_Id__c": None,
+            "SalesforceId__c": "",
+            "State__c": "",
+            "Status__c": "Active",
+            "Tech_Awaiting_Novasys_Receipt__c": True,
+            "Termination_Date__c": None,
         }
-        req = {"schema_id": schema_id, "payload": self.encode(schema, payload)}
+        req: dict[str, Any] = {"schema_id": schema_id, "payload": self.encode(schema, payload)}
         return [req]
 
-    def subscribe(self, topic, replay_type, replay_id, num_requested, callback):
+    def subscribe(self, topic: str, replay_type: str, replay_id: int, num_requested: int, callback) -> None:
         """
         Calls the Subscribe RPC defined in the proto file and accepts a
         client-defined callback to handle any events that are returned by the
@@ -224,15 +223,14 @@ class PubSub(object):
         for event in sub_stream:
             callback(event, self)
 
-    def publish(self, topic_name, schema, schema_id):
-        """
-        Publishes events to the specified Platform Event topic.
-        """
-
+    def publish(self, topic_name: str) -> None:
+        """Publishes events to the specified Platform Event topic."""
+        topic: pb2.TopicInfo = self.get_topic(topic_name)
+        schema: pb2.SchemaInfo = self.get_schema_json(topic.schema_id)
         return self.stub.Publish(
             self.pb2.PublishRequest(
                 topic_name=topic_name,
-                events=self.generate_producer_events(schema, schema_id),
+                events=self.generate_producer_events(schema, topic.schema_id),
             ),
             metadata=self.metadata,
         )
