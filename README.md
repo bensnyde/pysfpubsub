@@ -39,7 +39,7 @@ def process_event(event, client):
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] The subscription is active.")
 
 config = {
-    "url": "login.salesforce.com",
+    "url": "https://login.salesforce.com",
     "username": "myusername",
     "password": "mypassword",
     "grpc_host": "api.pubsub.salesforce.com",
