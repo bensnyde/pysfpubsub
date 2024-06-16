@@ -11,10 +11,8 @@ import certifi
 import grpc
 import requests
 
-import libs.pubsub_api_pb2 as pb2
-import libs.pubsub_api_pb2_grpc as pb2_grpc
-from models.event import Event
-from models.settings import Settings
+import pysfpubsub.pubsub_api_pb2 as pb2
+import pysfpubsub.pubsub_api_pb2_grpc as pb2_grpc
 
 logger = logging.getLogger(__name__)
 
@@ -22,25 +20,32 @@ with open(certifi.where(), "rb") as f:
     secure_channel_credentials = grpc.ssl_channel_credentials(f.read())
 
 
-class PubSub:
+class Client:
     """Class with helpers to use the Salesforce Pub/Sub API."""
 
     json_schema_dict: dict[str, Any] = {}
 
-    def __init__(self, settings: Settings) -> None:
-        self.url: str = settings.URL
-        self.username: str = settings.USER
-        self.password: str = settings.PASSWORD
+    def __init__(
+        self,
+        url: str,
+        username: str,
+        password: str,
+        grpc_host: str,
+        grpc_port: int,
+        api_version: str = "57.0"
+    ) -> None:
+        self.url: str = url
+        self.username: str = username
+        self.password: str = password
         self.metadata: tuple[tuple[str, str]] | None = None
-        grpc_host: str = settings.GRPC_HOST
-        grpc_port: int = settings.GRPC_PORT
+        grpc_host: str = grpc_host
+        grpc_port: int = grpc_port
         pubsub_url: str = f"{grpc_host}:{grpc_port}"
         channel = grpc.secure_channel(pubsub_url, secure_channel_credentials)
         self.stub = pb2_grpc.PubSubStub(channel)
         self.session_id: str | None = None
         self.pb2: pb2 = pb2
-        self.topic_name: str = settings.TOPIC
-        self.apiVersion: str = settings.API_VERSION
+        self.apiVersion: str = api_version
 
         """
         Semaphore used for subscriptions. This keeps the subscription stream open
@@ -194,14 +199,12 @@ class PubSub:
 
         return self.json_schema_dict[schema_id]
 
-    def generate_producer_events(self, schema, schema_id: str) -> list[dict[str, Any]]:
-        """Genereates event to publish."""
-        payload: dict[str, Any] = Event.get_example().model_dump()
-        req: dict[str, Any] = {
+    def format_payload(self, schema, schema_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        """Format event payload for publish."""
+        return {
             "schema_id": schema_id,
             "payload": self.encode(schema, payload),
         }
-        return [req]
 
     def subscribe(
         self,
@@ -227,14 +230,12 @@ class PubSub:
         for event in sub_stream:
             callback(event, self)
 
-    def publish(self, topic_name: str) -> None:
-        """Publishes events to the specified Platform Event topic."""
-        topic: pb2.TopicInfo = self.get_topic(topic_name)
-        schema: pb2.SchemaInfo = self.get_schema_json(topic.schema_id)
+    def publish(self, topic_name: str, events: dict[str, Any]) -> None:
+        """Publishes event to the specified Platform Event topic."""
         return self.stub.Publish(
             self.pb2.PublishRequest(
                 topic_name=topic_name,
-                events=self.generate_producer_events(schema, topic.schema_id),
+                events=events,
             ),
             metadata=self.metadata,
         )
