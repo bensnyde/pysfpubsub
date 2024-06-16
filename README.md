@@ -4,6 +4,12 @@ Python gRPC client for the Salesforce Pub/Sub API.
 
 https://developer.salesforce.com/docs/platform/pub-sub-api/overview
 
+### Installation
+
+```
+pip install pysfpubsub
+```
+
 ### Usage
 
 ```
