@@ -38,14 +38,15 @@ def process_event(event, client):
     else:
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] The subscription is active.")
 
-sfdc_handler = Client(
-    "login.salesforce.com", 
-    "my@user.com", 
-    "mypassword", 
-    "api.pubsub.salesforce.com", 
-    7443,
-    "57.0"
-)
+config = {
+    "url": "login.salesforce.com",
+    "username": "myusername",
+    "password": "mypassword",
+    "grpc_host": "api.pubsub.salesforce.com",
+    "grpc_port": 7443,
+    "api_version": "57.0"
+}
+sfdc_handler = Client(**config)
 sfdc_handler.auth()
 sfdc_handler.subscribe("/events/Example_Event__c", "LATEST", "", 1, process_event)
 ```

@@ -75,7 +75,7 @@ class Client:
             + "<urn:login><urn:username><![CDATA["
             + self.username
             + "]]></urn:username><urn:password><![CDATA["
-            + self.password.get_secret_value()
+            + self.password
             + "]]></urn:password></urn:login></soapenv:Body></soapenv:Envelope>"
         )
         res: requests.models.Response = requests.post(
