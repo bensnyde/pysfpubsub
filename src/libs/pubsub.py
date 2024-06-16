@@ -1,9 +1,9 @@
-import logging
-
 import io
+import logging
 import threading
 import xml.etree.ElementTree as et
-from datetime import datetime
+from typing import Any
+from urllib.parse import ParseResult, urlparse
 
 import avro.io
 import avro.schema
@@ -13,11 +13,10 @@ import requests
 
 import libs.pubsub_api_pb2 as pb2
 import libs.pubsub_api_pb2_grpc as pb2_grpc
-
-from urllib.parse import urlparse, ParseResult
+from models.event import Event
 from models.settings import Settings
-from typing import Any
 
+logger = logging.getLogger(__name__)
 
 with open(certifi.where(), "rb") as f:
     secure_channel_credentials = grpc.ssl_channel_credentials(f.read())
@@ -25,6 +24,7 @@ with open(certifi.where(), "rb") as f:
 
 class PubSub:
     """Class with helpers to use the Salesforce Pub/Sub API."""
+
     json_schema_dict: dict[str, Any] = {}
 
     def __init__(self, settings: Settings) -> None:
@@ -73,7 +73,9 @@ class PubSub:
             + self.password.get_secret_value()
             + "]]></urn:password></urn:login></soapenv:Body></soapenv:Envelope>"
         )
-        res: requests.models.Response = requests.post(str(self.url) + url_suffix, data=xml, headers=headers)
+        res: requests.models.Response = requests.post(
+            str(self.url) + url_suffix, data=xml, headers=headers
+        )
         res_xml: et.Element = et.fromstring(res.content.decode("utf-8"))[0][0][0]
 
         try:
@@ -81,7 +83,10 @@ class PubSub:
             self.url = "{}://{}".format(url_parts.scheme, url_parts.netloc)
             self.session_id = res_xml[4].text
         except IndexError:
-            print("An exception occurred. Check the response XML below:", res.__dict__)
+            logger.error(
+                f"An exception occurred. Check the response XML below: {res.__dict__}",
+                exc_info=True,
+            )
 
         # Get org ID from UserInfo
         uinfo = res_xml[6]
@@ -99,7 +104,9 @@ class PubSub:
         """Release semaphore so FetchRequest can be sent."""
         self.semaphore.release()
 
-    def make_fetch_request(self, topic: str, replay_type: str, replay_id: int, num_requested: int) -> pb2.FetchRequest:
+    def make_fetch_request(
+        self, topic: str, replay_type: str, replay_id: bytes, num_requested: int
+    ) -> pb2.FetchRequest:
         """Creates a FetchRequest per the proto file."""
         replay_preset: pb2.ReplayPreset | None = None
         match replay_type:
@@ -114,16 +121,17 @@ class PubSub:
         return pb2.FetchRequest(
             topic_name=topic,
             replay_preset=replay_preset,
-            replay_id=bytes.fromhex(replay_id),
+            replay_id=replay_id if replay_id else None,
             num_requested=num_requested,
         )
 
-    def fetch_req_stream(self, topic: str, replay_type: str, replay_id: int, num_requested: int) -> pb2.FetchRequest:
+    def fetch_req_stream(
+        self, topic: str, replay_type: str, replay_id: bytes, num_requested: int
+    ) -> pb2.FetchRequest:
         """Returns a FetchRequest stream for the Subscribe RPC."""
         while True:
             # Only send FetchRequest when needed. Semaphore release indicates need for new FetchRequest
             self.semaphore.acquire()
-            print("Sending Fetch Request")
             yield self.make_fetch_request(topic, replay_type, replay_id, num_requested)
 
     def encode(self, schema, payload: dict[str, Any]) -> bytes:
@@ -188,25 +196,21 @@ class PubSub:
 
     def generate_producer_events(self, schema, schema_id: str) -> list[dict[str, Any]]:
         """Genereates event to publish."""
-        payload: dict[str, Any] = {
-            "CreatedDate": int(datetime.now().timestamp()),
-            "CreatedById": "005R0000000cw06IAA",
-            "Text__c": "",
-            "Agent_Master_Id__c": None,
-            "Certification_Number__c": "",
-            "Effective_Date__c": None,
-            "FFM_Id__c": "",
-            "Novasys_Primary_Id__c": None,
-            "SalesforceId__c": "",
-            "State__c": "",
-            "Status__c": "Active",
-            "Tech_Awaiting_Novasys_Receipt__c": True,
-            "Termination_Date__c": None,
+        payload: dict[str, Any] = Event.get_example().model_dump()
+        req: dict[str, Any] = {
+            "schema_id": schema_id,
+            "payload": self.encode(schema, payload),
         }
-        req: dict[str, Any] = {"schema_id": schema_id, "payload": self.encode(schema, payload)}
         return [req]
 
-    def subscribe(self, topic: str, replay_type: str, replay_id: int, num_requested: int, callback) -> None:
+    def subscribe(
+        self,
+        topic: str,
+        replay_type: str,
+        replay_id: bytes,
+        num_requested: int,
+        callback,
+    ) -> None:
         """
         Calls the Subscribe RPC defined in the proto file and accepts a
         client-defined callback to handle any events that are returned by the
@@ -219,7 +223,7 @@ class PubSub:
             self.fetch_req_stream(topic, replay_type, replay_id, num_requested),
             metadata=self.metadata,
         )
-        print("> Subscribed to", topic)
+        logger.info(f"> Subscribed to {topic}")
         for event in sub_stream:
             callback(event, self)
 
