@@ -22,7 +22,7 @@ pip install pysfpubsub
 1. Import the `Client` class:
 
 ```python
-from pubsub_client import Client
+from pysfpubsub import Client
 ```
 
 2. Create a new instance of the `Client` class with the required parameters:
