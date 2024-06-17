@@ -1,4 +1,3 @@
-```markdown
 # Salesforce Pub/Sub API Python gRPC Client
 
 A Python class provides to use the Salesforce Pub/Sub API, allowing you to subscribe to and publish Platform Events.
