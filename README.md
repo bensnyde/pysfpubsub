@@ -45,7 +45,7 @@ def callback(event, client):
     else:
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] The subscription is active.")
 
-sfdc_handler = Client(
+client = Client(
     url="https://login.salesforce.com",
     username="your_username",
     password="your_password",
@@ -53,8 +53,8 @@ sfdc_handler = Client(
     grpc_port=7443,
     api_version="57.0"
 )
-sfdc_handler.auth()
-sfdc_handler.subscribe(
+client.auth()
+client.subscribe(
     topic="/event/Event_Example__c",
     replay_type="LATEST",
     replay_id=None,
