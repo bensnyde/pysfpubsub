@@ -1,10 +1,17 @@
-# pysfpubsub
+# Salesforce Pub/Sub API Python Client
 
-Python gRPC client for the Salesforce Pub/Sub API.
+This Python class provides helpers to use the Salesforce Pub/Sub API, allowing you to subscribe to and publish Platform Events.
 
 https://developer.salesforce.com/docs/platform/pub-sub-api/overview
 
-### Installation
+## Prerequisites
+
+- Python 3.x
+- Salesforce organization with Pub/Sub API enabled
+- Avro library (`pip install avro`)
+- gRPC library (`pip install grpcio`)
+
+## Installation
 
 ```
 pip install pysfpubsub
@@ -16,7 +23,7 @@ pip install pysfpubsub
 from datetime import datetime
 from pysfpubsub import Client
 
-def process_event(event, client):
+def callback(event, client):
     """
     This is a callback that gets passed to the `Client.subscribe()` method.
     When no events are received within a certain time period, the API's subscribe
@@ -38,15 +45,20 @@ def process_event(event, client):
     else:
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] The subscription is active.")
 
-config = {
-    "url": "https://login.salesforce.com",
-    "username": "myusername",
-    "password": "mypassword",
-    "grpc_host": "api.pubsub.salesforce.com",
-    "grpc_port": 7443,
-    "api_version": "57.0"
-}
-sfdc_handler = Client(**config)
+sfdc_handler = Client(
+    url="https://login.salesforce.com",
+    username="your_username",
+    password="your_password",
+    grpc_host="api.pubsub.salesforce.com",
+    grpc_port=7443,
+    api_version="57.0"
+)
 sfdc_handler.auth()
-sfdc_handler.subscribe("/events/Example_Event__c", "LATEST", "", 1, process_event)
+sfdc_handler.subscribe(
+    topic="/event/Event_Example__c",
+    replay_type="LATEST",
+    replay_id=None,
+    num_requested=10,
+    callback=callback
+)
 ```
