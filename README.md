@@ -1,6 +1,7 @@
-# Salesforce Pub/Sub API Python Client
+```markdown
+# Salesforce Pub/Sub API Python gRPC Client
 
-This Python class provides helpers to use the Salesforce Pub/Sub API, allowing you to subscribe to and publish Platform Events.
+A Python class provides to use the Salesforce Pub/Sub API, allowing you to subscribe to and publish Platform Events.
 
 https://developer.salesforce.com/docs/platform/pub-sub-api/overview
 
@@ -13,16 +14,40 @@ https://developer.salesforce.com/docs/platform/pub-sub-api/overview
 
 ## Installation
 
-```
+```bash
 pip install pysfpubsub
 ```
 
-### Usage
+## Usage
 
+1. Import the `Client` class:
+
+```python
+from pubsub_client import Client
 ```
-from datetime import datetime
-from pysfpubsub import Client
 
+2. Create a new instance of the `Client` class with the required parameters:
+
+```python
+client = Client(
+    url="https://login.salesforce.com",
+    username="your_username",
+    password="your_password",
+    grpc_host="api.pubsub.salesforce.com",
+    grpc_port=7443,
+    api_version="57.0"
+)
+```
+
+3. Authenticate with Salesforce:
+
+```python
+client.auth()
+```
+
+4. Subscribe to a Platform Event topic:
+
+```python
 def callback(event, client):
     """
     This is a callback that gets passed to the `Client.subscribe()` method.
@@ -45,20 +70,43 @@ def callback(event, client):
     else:
         print(f"[{datetime.now():%Y-%m-%d %H:%M:%S}] The subscription is active.")
 
-client = Client(
-    url="https://login.salesforce.com",
-    username="your_username",
-    password="your_password",
-    grpc_host="api.pubsub.salesforce.com",
-    grpc_port=7443,
-    api_version="57.0"
-)
-client.auth()
 client.subscribe(
-    topic="/event/Event_Example__c",
+    topic="/event/MyPlatformEventTopic__e",
     replay_type="LATEST",
     replay_id=None,
     num_requested=10,
     callback=callback
 )
+```
+
+5. Publish an event to a Platform Event topic:
+
+```python
+topic_name = "/event/MyPlatformEventTopic__e"
+topic = client.get_topic(topic_name)
+schema_id = topic.schema_id
+schema = client.get_schema_json(schema_id)
+payload = {"SomeField": "Some Value"}
+formatted_payload = client.format_payload(schema, schema_id, payload)
+
+client.publish(topic_name=topic_name, events=[formatted_payload])
+```
+
+## Methods
+
+- `auth()`: Authenticates with Salesforce and retrieves a session token.
+- `release_subscription_semaphore()`: Releases the semaphore used for subscriptions.
+- `make_fetch_request(topic, replay_type, replay_id, num_requested)`: Creates a `FetchRequest` object for the Subscribe RPC.
+- `fetch_req_stream(topic, replay_type, replay_id, num_requested)`: Returns a `FetchRequest` stream for the Subscribe RPC.
+- `encode(schema, payload)`: Encodes a payload using the provided schema.
+- `decode(schema, payload)`: Decodes a payload using the provided schema.
+- `get_topic(topic_name)`: Retrieves information about a topic using the GetTopic RPC.
+- `get_schema_json(schema_id)`: Retrieves the schema JSON for a given schema ID using the GetSchema RPC.
+- `format_payload(schema, schema_id, payload)`: Formats an event payload for publishing.
+- `subscribe(topic, replay_type, replay_id, num_requested, callback)`: Subscribes to a Platform Event topic and calls the provided callback for received events.
+- `publish(topic_name, events)`: Publishes events to a Platform Event topic.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
 ```
