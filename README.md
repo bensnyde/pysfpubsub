@@ -107,5 +107,5 @@ client.publish(topic_name=topic_name, events=[formatted_payload])
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [The Unlicense](LICENSE).
 ```
