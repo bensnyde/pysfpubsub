@@ -1,6 +1,6 @@
-# Salesforce Pub/Sub API Python gRPC Client
+# A Python gRPC Client for the Salesforce Pub/Sub API 
 
-A Python class provides to use the Salesforce Pub/Sub API, allowing you to subscribe to and publish Platform Events.
+A Python class to use the Salesforce Pub/Sub API, allowing you to subscribe to and publish Platform Events.
 
 https://developer.salesforce.com/docs/platform/pub-sub-api/overview
 
@@ -108,4 +108,3 @@ client.publish(topic_name=topic_name, events=[formatted_payload])
 ## License
 
 This project is licensed under the [The Unlicense](LICENSE).
-```
